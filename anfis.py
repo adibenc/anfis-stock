@@ -6,12 +6,15 @@ import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
 class ANFIS:
+    tfreuse = True
 
     def __init__(self, n_inputs, n_rules, learning_rate=1e-2):
         self.n = n_inputs
         self.m = n_rules
         self.inputs = tf.placeholder(tf.float32, shape=(None, n_inputs))  # Input
         self.targets = tf.placeholder(tf.float32, shape=None)  # Desired output
+        
+        # with tf.variable_scope("mu", reuse=self.tfreuse) as scope:
         mu = tf.get_variable("mu", [n_rules * n_inputs],
                              initializer=tf.random_normal_initializer(0, 1))  # Means of Gaussian MFS
         sigma = tf.get_variable("sigma", [n_rules * n_inputs],
