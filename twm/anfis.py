@@ -27,6 +27,7 @@ class ANFIS:
 
 
     """
+    onCompleteMethod = None
 
     def __init__(self, X, Y, memFunction):
         self.X = np.array(copy.copy(X))
@@ -34,7 +35,9 @@ class ANFIS:
         self.XLen = len(self.X)
         self.memClass = copy.deepcopy(memFunction)
         self.memFuncs = self.memClass.MFList
-        self.memFuncsByVariable = [[x for x in range(len(self.memFuncs[z]))] for z in range(len(self.memFuncs))]
+        self.memFuncsByVariable = [
+            [x for x in range(len(self.memFuncs[z]))] for z in range(len(self.memFuncs))
+        ]
         self.rules = np.array(list(itertools.product(*self.memFuncsByVariable)))
         self.consequents = np.empty(self.Y.ndim * len(self.rules) * (self.X.shape[1] + 1))
         self.consequents.fill(0)
@@ -53,6 +56,13 @@ class ANFIS:
             S = S - (np.array(np.dot(np.dot(np.dot(S,np.matrix(a).transpose()),np.matrix(a)),S)))/(1+(np.dot(np.dot(S,a),a)))
             x = x + (np.dot(S,np.dot(np.matrix(a).transpose(),(np.matrix(b)-np.dot(np.matrix(a),x)))))
         return x
+    
+    def onCompleteTrain(self):
+        try:
+            self.onCompleteMethod()
+        except:
+            pass
+        return self
 
     def trainHybridJangOffLine(self, epochs=5, tolerance=1e-5, initialGamma=1000, k=0.01):
 
@@ -83,7 +93,9 @@ class ANFIS:
             # back propagation
             if convergence is not True:
                 cols = range(len(self.X[0,:]))
-                dE_dAlpha = list(backprop(self, colX, cols, wSum, w, layerFive) for colX in range(self.X.shape[1]))
+                dE_dAlpha = list(
+                    backprop(self, colX, cols, wSum, w, layerFive) for colX in range(self.X.shape[1])
+                )
 
 
             if len(self.errors) >= 4:
@@ -123,6 +135,8 @@ class ANFIS:
                     for param in range(len(paramList)):
                         self.memFuncs[varsWithMemFuncs][MFs][1][paramList[param]] = self.memFuncs[varsWithMemFuncs][MFs][1][paramList[param]] + dAlpha[varsWithMemFuncs][MFs][param]
             epoch = epoch + 1
+        
+        self.onCompleteTrain()
 
 
         self.fittedValues = predict(self,self.X)
@@ -178,7 +192,11 @@ def forwardHalfPass(ANFISObj, Xs):
         layerOne = ANFISObj.memClass.evaluateMF(Xs[pattern,:])
 
         #layer two
-        miAlloc = [[layerOne[x][ANFISObj.rules[row][x]] for x in range(len(ANFISObj.rules[0]))] for row in range(len(ANFISObj.rules))]
+        miAlloc = [
+            [
+                layerOne[x][ANFISObj.rules[row][x]] for x in range(len(ANFISObj.rules[0]))
+            ] for row in range(len(ANFISObj.rules))
+        ]
         layerTwo = np.array([np.product(x) for x in miAlloc]).T
         if pattern == 0:
             w = layerTwo
@@ -228,11 +246,25 @@ def backprop(ANFISObj, columnX, columns, theWSum, theW, theLayerFive):
 
                     senSit = mfDerivs.partial_dMF(ANFISObj.X[rowX,columnX],ANFISObj.memFuncs[columnX][MF],alpha)
                     # produces d_ruleOutput/d_parameterWithinMF
-                    dW_dAplha = senSit * np.array([np.prod([ANFISObj.memClass.evaluateMF(tmpRow)[c][ANFISObj.rules[r][c]] for c in adjCols]) for r in rulesWithAlpha])
+                    dW_dAplha = senSit * np.array([
+                        np.prod(
+                            [
+                                ANFISObj.memClass.evaluateMF(tmpRow)[c][ANFISObj.rules[r][c]] for c in adjCols
+                            ]
+                        ) for r in rulesWithAlpha
+                    ])
 
                     bucket1 = np.empty(len(ANFISObj.rules[:,0]))
                     for consequent in range(len(ANFISObj.rules[:,0])):
-                        fConsequent = np.dot(np.append(ANFISObj.X[rowX,:],1.),ANFISObj.consequents[((ANFISObj.X.shape[1] + 1) * consequent):(((ANFISObj.X.shape[1] + 1) * consequent) + (ANFISObj.X.shape[1] + 1)),colY])
+                        fConsequent = np.dot(
+                            np.append(ANFISObj.X[rowX,:],1.0),
+                            ANFISObj.consequents[
+                                ((ANFISObj.X.shape[1] + 1) * consequent):
+                                (
+                                    ((ANFISObj.X.shape[1] + 1) * consequent) + (ANFISObj.X.shape[1] + 1)
+                                ),colY
+                            ]
+                        )
                         acum = 0
                         if consequent in rulesWithAlpha:
                             acum = dW_dAplha[np.where(rulesWithAlpha==consequent)] * theWSum[rowX]
